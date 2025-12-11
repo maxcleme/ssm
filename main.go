@@ -75,15 +75,15 @@ func resolveSSMVars(ctx context.Context, client *ssm.Client, environ []string) (
 }
 
 func loadEnv() ([]string, error) {
+	vars := os.Environ()
 	if envFile == "" {
-		return os.Environ(), nil
+		return vars, nil
 	}
 	file, err := os.Open(envFile)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
-	var vars []string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
