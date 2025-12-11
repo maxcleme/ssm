@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -16,6 +17,8 @@ import (
 
 const ssmPrefix = "ssm://"
 
+var envFile string
+
 var runCmd = &cobra.Command{
 	Use:   "run -- [command]",
 	Args:  cobra.MinimumNArgs(1),
@@ -27,7 +30,11 @@ var runCmd = &cobra.Command{
 			return err
 		}
 		client := ssm.NewFromConfig(cfg)
-		env, err := resolveSSMVars(ctx, client, os.Environ())
+		environ, err := loadEnv()
+		if err != nil {
+			return fmt.Errorf("loading environment: %w", err)
+		}
+		env, err := resolveSSMVars(ctx, client, environ)
 		if err != nil {
 			return err
 		}
@@ -67,8 +74,33 @@ func resolveSSMVars(ctx context.Context, client *ssm.Client, environ []string) (
 	return result, errs
 }
 
+func loadEnv() ([]string, error) {
+	vars := os.Environ()
+	if envFile == "" {
+		return vars, nil
+	}
+	file, err := os.Open(envFile)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		vars = append(vars, line)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return vars, nil
+}
+
 func main() {
 	rootCmd := &cobra.Command{Use: "ssm"}
+	runCmd.Flags().StringVar(&envFile, "env-file", "", "Path to a file containing environment variables")
 	rootCmd.AddCommand(runCmd)
 	rootCmd.Execute()
 }
